@@ -20,7 +20,7 @@ func trace() *Stacktrace {
 func init() {
 	thisFile, thisPackage = derivePackage()
 	functionNameTests = []FunctionNameTest{
-		{0, thisPackage, "TestFunctionName"},
+		{0, "raven-go", "TestFunctionName"},
 		{1, "testing", "tRunner"},
 		{2, "runtime", "goexit"},
 		{100, "", ""},
@@ -44,8 +44,8 @@ func TestFunctionName(t *testing.T) {
 		pc, _, _, _ := runtime.Caller(test.skip)
 		pack, name := functionName(runtime.FuncForPC(pc).Name())
 
-		if pack != test.pack {
-			t.Errorf("incorrect package; got %s, want %s", pack, test.pack)
+		if !strings.Contains(pack, test.pack) {
+			t.Errorf("incorrect package; %s must contain %s", pack, test.pack)
 		}
 		if name != test.name {
 			t.Errorf("incorrect function; got %s, want %s", name, test.name)
@@ -78,8 +78,8 @@ func TestStacktraceFrame(t *testing.T) {
 	if f.Function != "trace" {
 		t.Error("incorrect Function:", f.Function)
 	}
-	if f.Module != thisPackage {
-		t.Error("incorrect Module:", f.Module)
+	if !strings.Contains(f.Module, thisPackage) {
+		t.Errorf("incorrect Module: %s must contain %s", f.Module, thisPackage)
 	}
 	if f.Lineno != 16 {
 		t.Error("incorrect Lineno:", f.Lineno)
@@ -87,7 +87,7 @@ func TestStacktraceFrame(t *testing.T) {
 	if f.InApp != !runningInVendored {
 		t.Error("expected InApp to be true")
 	}
-	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
+	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", "github.com/getsentry/raven-go") {
 		t.Error("incorrect Culprit:", st.Culprit())
 	}
 }
