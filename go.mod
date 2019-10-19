@@ -1,4 +1,4 @@
-module github.com/getsentry/raven-go
+module github.com/tooolbox/raven-go
 
 go 1.13
 

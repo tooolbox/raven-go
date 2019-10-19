@@ -1,8 +1,9 @@
 # raven 
 
-[![Build Status](https://api.travis-ci.org/getsentry/raven-go.svg?branch=master)](https://travis-ci.org/getsentry/raven-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/getsentry/raven-go)](https://goreportcard.com/report/github.com/getsentry/raven-go)
-[![GoDoc](https://godoc.org/github.com/getsentry/raven-go?status.svg)](https://godoc.org/github.com/getsentry/raven-go)
+---
+
+> This fork was created solely to add go module support to existing projects that depend on it.
+> Do not use this to begin new projects.
 
 ---
 

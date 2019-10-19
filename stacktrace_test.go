@@ -87,7 +87,7 @@ func TestStacktraceFrame(t *testing.T) {
 	if f.InApp != !runningInVendored {
 		t.Error("expected InApp to be true")
 	}
-	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", "github.com/getsentry/raven-go") {
+	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", "github.com/tooolbox/raven-go") {
 		t.Error("incorrect Culprit:", st.Culprit())
 	}
 }
