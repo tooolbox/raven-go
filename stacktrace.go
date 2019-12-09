@@ -138,7 +138,7 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
 	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line}
 	frame.Module, frame.Function = functionName(fName)
-	frame.InApp = isInAppFrame(*frame)
+	frame.InApp = isInAppFrame(*frame, appPackagePrefixes)
 
 	// `runtime.goexit` is effectively a placeholder that comes from
 	// runtime/asm_amd64.s and is meaningless.
@@ -172,14 +172,16 @@ func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPa
 
 // Determines whether frame should be marked as InApp
 // copied from sentry-go
-func isInAppFrame(frame StacktraceFrame) bool {
-	if strings.HasPrefix(frame.AbsolutePath, build.Default.GOROOT) ||
-		strings.Contains(frame.Module, "vendor") ||
-		strings.Contains(frame.Module, "third_party") {
-		return false
+func isInAppFrame(frame StacktraceFrame, appPackagePrefixes []string) bool {
+	if frame.Module == "main" {
+		return true
 	}
-
-	return true
+	for _, prefix := range appPackagePrefixes {
+		if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
+			return true
+		}
+	}
+	return false
 }
 
 // Retrieve the name of the package and function containing the PC.

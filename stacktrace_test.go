@@ -108,7 +108,7 @@ func TestStacktraceContext(t *testing.T) {
 
 func derivePackage() (file, pack string) {
 	// Get file name by seeking caller's file name.
-	_, callerFile, _, ok := runtime.Caller(1)
+	pc, callerFile, _, ok := runtime.Caller(1)
 	if !ok {
 		return
 	}
@@ -123,14 +123,12 @@ func derivePackage() (file, pack string) {
 	}
 
 	// Now derive package name
-	dir := filepath.Dir(callerFile)
+	// Previously we used filepath.Dir(callerFile) and then build.ImportDir but this fails for Modules,
+	// so now we get the calling function and take the package (module) name from there.
+	details := runtime.FuncForPC(pc)
+	split := strings.Split(details.Name(), ".")
 
-	dirPkg, err := build.ImportDir(dir, build.AllowBinary)
-	if err != nil {
-		return
-	}
-
-	pack = dirPkg.ImportPath
+	pack = split[0]
 	return
 }
 
