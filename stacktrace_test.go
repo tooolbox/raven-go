@@ -123,12 +123,25 @@ func derivePackage() (file, pack string) {
 	}
 
 	// Now derive package name
-	// Previously we used filepath.Dir(callerFile) and then build.ImportDir but this fails for Modules,
-	// so now we get the calling function and take the package (module) name from there.
-	details := runtime.FuncForPC(pc)
-	split := strings.Split(details.Name(), ".")
+	// This approach is preserved for backwards compatibility
+	dir := filepath.Dir(callerFile)
 
-	pack = split[0]
+	dirPkg, err := build.ImportDir(dir, build.AllowBinary)
+	if err != nil {
+		return
+	}
+
+	pack = dirPkg.ImportPath
+
+	// The above approach fails for Modules, producing a "." import path,
+	// so we get the calling function and take the package (module) name from there.
+	if pack == "." {
+		details := runtime.FuncForPC(pc)
+		split := strings.Split(details.Name(), ".")
+
+		pack = split[0]
+	}
+
 	return
 }
 
