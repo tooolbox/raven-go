@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/getsentry/raven-go"
+	"github.com/cockroachdb/raven-go"
 	"log"
 	"net/http"
 	"os"

@@ -2,6 +2,8 @@ package raven
 
 import (
 	"encoding/json"
+	"fmt"
+	pkgErrors "github.com/pkg/errors"
 	"reflect"
 	"testing"
 	"time"
@@ -52,7 +54,7 @@ func TestPacketJSON(t *testing.T) {
 		Timestamp:   Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:       ERROR,
 		Logger:      "com.getsentry.raven-go.logger-test-packet-json",
-		Tags:        []Tag{Tag{"foo", "bar"}},
+		Tags:        []Tag{{"foo", "bar"}},
 		Modules:     map[string]string{"foo": "bar"},
 		Fingerprint: []string{"{{ default }}", "a-custom-fingerprint"},
 		Interfaces:  []Interface{&Message{Message: "foo"}},
@@ -86,7 +88,7 @@ func TestPacketJSONNilInterface(t *testing.T) {
 		Timestamp:   Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:       ERROR,
 		Logger:      "com.getsentry.raven-go.logger-test-packet-json",
-		Tags:        []Tag{Tag{"foo", "bar"}},
+		Tags:        []Tag{{"foo", "bar"}},
 		Modules:     map[string]string{"foo": "bar"},
 		Fingerprint: []string{"{{ default }}", "a-custom-fingerprint"},
 		Interfaces:  []Interface{&Message{Message: "foo"}, nil},
@@ -106,7 +108,11 @@ func TestPacketJSONNilInterface(t *testing.T) {
 
 func TestPacketInit(t *testing.T) {
 	packet := &Packet{Message: "a", Interfaces: []Interface{&testInterface{}}}
-	packet.Init("foo")
+	err := packet.Init("foo")
+
+	if err != nil {
+		fmt.Println("failed to initialize packet")
+	}
 
 	if packet.Project != "foo" {
 		t.Error("incorrect Project:", packet.Project)
@@ -118,7 +124,7 @@ func TestPacketInit(t *testing.T) {
 		t.Errorf("ServerName should not be empty")
 	}
 	if packet.Level != ERROR {
-		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
+		t.Errorf("incorrect Level: got %s, want %s", packet.Level, ERROR)
 	}
 	if packet.Logger != "root" {
 		t.Errorf("incorrect Logger: got %s, want %s", packet.Logger, "root")
@@ -133,7 +139,11 @@ func TestPacketInit(t *testing.T) {
 
 func TestSetDSN(t *testing.T) {
 	client := &Client{}
-	client.SetDSN("https://u:p@example.com/sentry/1")
+	err := client.SetDSN("https://u:p@example.com/sentry/1")
+
+	if err != nil {
+		fmt.Println("invalid DSN")
+	}
 
 	if client.url != "https://example.com/sentry/api/1/store/" {
 		t.Error("incorrect url:", client.url)
@@ -143,6 +153,35 @@ func TestSetDSN(t *testing.T) {
 	}
 	if client.authHeader != "Sentry sentry_version=4, sentry_key=u, sentry_secret=p" {
 		t.Error("incorrect authHeader:", client.authHeader)
+	}
+}
+
+func TestNewClient(t *testing.T) {
+	client := newClient(nil)
+	if client.sampleRate != 1.0 {
+		t.Error("invalid default sample rate")
+	}
+}
+
+func TestSetSampleRate(t *testing.T) {
+	client := &Client{}
+	err := client.SetSampleRate(0.2)
+
+	if err != nil {
+		t.Error("invalid sample rate")
+	}
+
+	if client.sampleRate != 0.2 {
+		t.Error("incorrect sample rate: ", client.sampleRate)
+	}
+}
+
+func TestSetSampleRateInvalid(t *testing.T) {
+	client := &Client{}
+	err := client.SetSampleRate(-1.0)
+
+	if err != ErrInvalidSampleRate {
+		t.Error("invalid sample rate should return ErrInvalidSampleRate")
 	}
 }
 
@@ -210,12 +249,12 @@ func TestUnmarshalTimestamp(t *testing.T) {
 	}
 
 	if actual != expected {
-		t.Errorf("incorrect string; got %s, want %s", actual, expected)
+		t.Errorf("incorrect string; got %s, want %s", actual.Format("2006-01-02 15:04:05 -0700"), expected.Format("2006-01-02 15:04:05 -0700"))
 	}
 }
 
 func TestNilClient(t *testing.T) {
-	var client *Client = nil
+	var client *Client
 	eventID, ch := client.Capture(nil, nil)
 	if eventID != "" {
 		t.Error("expected empty eventID:", eventID)
@@ -224,5 +263,102 @@ func TestNilClient(t *testing.T) {
 	err := <-ch
 	if err != nil {
 		t.Error("expected nil err:", err)
+	}
+}
+
+func TestCaptureNil(t *testing.T) {
+	var client = DefaultClient
+	eventID, ch := client.Capture(nil, nil)
+	if eventID != "" {
+		t.Error("expected empty eventID:", eventID)
+	}
+	// wait on ch: no send should succeed immediately
+	err := <-ch
+	if err != nil {
+		t.Error("expected nil err:", err)
+	}
+}
+
+func TestCaptureNilError(t *testing.T) {
+	var client = DefaultClient
+	eventID := client.CaptureError(nil, nil)
+	if eventID != "" {
+		t.Error("expected empty eventID:", eventID)
+	}
+}
+
+// Custom error which implements causer
+type customErr struct {
+	msg   string
+	cause error
+}
+
+func (e *customErr) Error() (errorMsg string) {
+	if e.msg != "" && e.cause != nil {
+		errorMsg = fmt.Sprintf("%v \n\t==>> %v", e.msg, e.cause)
+	} else if e.msg == "" && e.cause != nil {
+		errorMsg = fmt.Sprintf("%v", e.cause)
+	} else if e.msg != "" && e.cause == nil {
+		errorMsg = fmt.Sprintf("%s", e.msg)
+	}
+	return
+}
+
+// Implementing the causer interface from github.com/pkg/errors
+func (e *customErr) Cause() error {
+	return e.cause
+}
+
+func TestCaptureNilCauseError(t *testing.T) {
+	var client = DefaultClient
+	err := pkgErrors.WithStack(&customErr{
+		// Setting a nil cause
+		cause: nil,
+		msg:   "This is a test",
+	})
+	eventID := client.CaptureError(err, nil)
+	if eventID == "" {
+		t.Error("expected non-empty eventID:", eventID)
+	}
+}
+
+func TestNewPacketWithExtraSetsDefault(t *testing.T) {
+	testCases := []struct {
+		Extra    Extra
+		Expected Extra
+	}{
+		// Defaults should be set when nil is passed
+		{
+			Extra:    nil,
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Defaults should be set when empty is passed
+		{
+			Extra:    Extra{},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should always override default keys
+		{
+			Extra: Extra{
+				"runtime.Version": "notagoversion",
+			},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should include our extra info
+		{
+			Extra: Extra{
+				"extra.extra": "extra",
+			},
+			Expected: setExtraDefaults(Extra{
+				"extra.extra": "extra",
+			}),
+		},
+	}
+
+	for i, test := range testCases {
+		packet := NewPacketWithExtra("packet", test.Extra)
+		if !reflect.DeepEqual(packet.Extra, test.Expected) {
+			t.Errorf("Case [%d]: Expected packet: %+v, got: %+v", i, test.Expected, packet.Extra)
+		}
 	}
 }
